@@ -35,3 +35,7 @@ Thumbs.db
 
 # Ignore local settings
 local_settings.py
+
+# Ignore collected static files (but not app static files)
+staticfiles/
+static_root/

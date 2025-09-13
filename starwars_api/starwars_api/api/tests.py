@@ -1,11 +1,14 @@
 from rest_framework.test import APITestCase
 from unittest.mock import patch, Mock
 import api.swapi_client as swapi_client
-from django.urls import reverse
+from django.urls import reverse, resolve
+from django.contrib import admin
 from rest_framework.test import APITestCase
 from rest_framework import status
 from unittest.mock import patch
+from django.test import TestCase
 from .models import Character, Film, Starship
+from .serializers import CharacterSerializer, FilmSerializer, StarshipSerializer
 
 class SwapiClientTests(APITestCase):
 	"""
@@ -63,6 +66,14 @@ class SwapiClientTests(APITestCase):
 		url = "not-a-valid-url"
 		swapi_id = swapi_client.parse_swapi_id(url)
 		self.assertEqual(swapi_id, -1)
+  
+	def test_parse_swapi_id_empty(self):
+		"""Test parse_swapi_id returns -1 for an empty string."""
+		self.assertEqual(swapi_client.parse_swapi_id(""), -1)
+
+	def test_parse_swapi_id_non_numeric(self):
+		"""Test parse_swapi_id returns -1 for a non-numeric ID in the URL."""
+		self.assertEqual(swapi_client.parse_swapi_id("https://swapi.info/api/people/abc/"), -1)
 
 class CharacterAPITests(APITestCase):
 	"""
@@ -290,3 +301,83 @@ class StarshipAPITests(APITestCase):
 		response = self.client.post(url)
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.assertIn('stored', response.data)
+
+class ModelAndSerializerTests(TestCase):
+    """Test model __str__, creation, relationships, and serializer output."""
+    def test_character_str_and_full_creation(self):
+        """Test character __str__, creation, relationships, and serializer output."""
+        film = Film.objects.create(swapi_id=1, title="A New Hope")
+        starship = Starship.objects.create(swapi_id=1, name="X-wing")
+        char = Character.objects.create(
+            swapi_id=1,
+            name="Luke Skywalker",
+            height="172",
+            mass="77",
+            gender="male",
+            url="https://swapi.info/api/people/1/",
+            votes=5
+        )
+        char.films.add(film)
+        char.starships.add(starship)
+        char.save()
+        self.assertEqual(str(char), "Luke Skywalker")
+        self.assertEqual(char.films.count(), 1)
+        self.assertEqual(char.starships.count(), 1)
+        self.assertEqual(char.votes, 5)
+        data = CharacterSerializer(char).data
+        self.assertEqual(data["name"], "Luke Skywalker")
+
+    def test_film_str_and_full_creation(self):
+        """Test film __str__, creation, and serializer output."""
+        film = Film.objects.create(
+            swapi_id=2,
+            title="The Empire Strikes Back",
+            episode_id=5,
+            director="Irvin Kershner",
+            producer="Gary Kurtz",
+            release_date="1980-05-21",
+            url="https://swapi.info/api/films/2/",
+            votes=10
+        )
+        self.assertEqual(str(film), "The Empire Strikes Back")
+        self.assertEqual(film.votes, 10)
+        data = FilmSerializer(film).data
+        self.assertEqual(data["title"], "The Empire Strikes Back")
+
+    def test_starship_str_and_full_creation(self):
+        """Test starship __str__, creation, and serializer output."""
+        starship = Starship.objects.create(
+            swapi_id=2,
+            name="TIE Fighter",
+            model="Twin Ion Engine",
+            manufacturer="Sienar Fleet Systems",
+            url="https://swapi.info/api/starships/2/",
+            votes=3
+        )
+        self.assertEqual(str(starship), "TIE Fighter")
+        self.assertEqual(starship.votes, 3)
+        data = StarshipSerializer(starship).data
+        self.assertEqual(data["name"], "TIE Fighter")
+
+class AdminRegistrationTests(TestCase):
+    def test_admin_registered(self):
+        """Test that Character, Film, and Starship are registered in admin."""
+        self.assertIn(Character, admin.site._registry)
+        self.assertIn(Film, admin.site._registry)
+        self.assertIn(Starship, admin.site._registry)
+
+class UrlsTests(TestCase):
+    def test_characters_url(self):
+        """Test that /api/characters/ is routable."""
+        resolver = resolve("/api/characters/")
+        self.assertTrue(resolver)
+        
+    def test_films_url(self):
+        """Test that /api/films/ is routable."""
+        resolver = resolve("/api/films/")
+        self.assertTrue(resolver)
+        
+    def test_starships_url(self):
+        """Test that /api/starships/ is routable."""
+        resolver = resolve("/api/starships/")
+        self.assertTrue(resolver)
